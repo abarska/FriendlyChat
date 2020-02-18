@@ -35,6 +35,8 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
+    // 45% done by tuesday evening
+
     private static final String TAG = "MainActivity";
 
     public static final String ANONYMOUS = "anonymous";
