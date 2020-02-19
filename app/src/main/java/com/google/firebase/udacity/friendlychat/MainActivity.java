@@ -18,11 +18,9 @@ package com.google.firebase.udacity.friendlychat;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-
 import android.text.Editable;
 import android.text.InputFilter;
 import android.text.TextWatcher;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -39,6 +37,9 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.firebase.ui.auth.AuthUI;
+import com.google.android.gms.tasks.Continuation;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.ChildEventListener;
@@ -48,14 +49,13 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
+import com.google.firebase.storage.UploadTask;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
-
-    // 45% done by tuesday evening
 
     private static final String TAG = "MainActivity";
 
@@ -106,11 +106,9 @@ public class MainActivity extends AppCompatActivity {
         mProgressBar.setVisibility(ProgressBar.INVISIBLE);
 
         ImageButton mPhotoPickerButton = findViewById(R.id.photoPickerButton);
-        Log.i(TAG, "image button initialized");
         mPhotoPickerButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Log.i(TAG, "onClick() called");
                 Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                 intent.setType("image/jpeg");
                 intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
@@ -173,24 +171,35 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        switch (requestCode) {
-            case RC_SIGN_IN:
-                if (resultCode == RESULT_OK) {
-                    Toast.makeText(this, "signed in", Toast.LENGTH_SHORT).show();
-                } else if (resultCode == RESULT_CANCELED) {
-                    Toast.makeText(this, "sign in canceled", Toast.LENGTH_SHORT).show();
-                    finish();
-                }
-                break;
-            case RC_PHOTO_PICKER:
-                if (resultCode == RESULT_OK) {
-                    Uri uri = data.getData();
-                    StorageReference ref = mStorageDatabaseReference.child(uri.getLastPathSegment());
-
-                }
-                break;
-        }
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == RC_SIGN_IN) {
+            if (resultCode == RESULT_OK) {
+                Toast.makeText(this, "Signed in!", Toast.LENGTH_SHORT).show();
+            } else if (resultCode == RESULT_CANCELED) {
+                Toast.makeText(this, "Sign in canceled", Toast.LENGTH_SHORT).show();
+                finish();
+            }
+        } else if (requestCode == RC_PHOTO_PICKER && resultCode == RESULT_OK) {
+
+            Uri selectedImageUri = data.getData();
+            final StorageReference ref = mStorageDatabaseReference.child(selectedImageUri.getLastPathSegment());
+            UploadTask task = ref.putFile(selectedImageUri);
+
+            task.continueWithTask(new Continuation<UploadTask.TaskSnapshot, Task<Uri>>() {
+                @Override
+                public Task<Uri> then(@NonNull Task<UploadTask.TaskSnapshot> task) throws Exception {
+                    if (!task.isSuccessful()) throw task.getException();
+                    return ref.getDownloadUrl();
+                }
+            }).addOnCompleteListener(new OnCompleteListener<Uri>() {
+                @Override
+                public void onComplete(@NonNull Task<Uri> task) {
+                    Uri downloadUri = task.getResult();
+                    FriendlyMessage message = new FriendlyMessage(null, mUsername, downloadUri.toString());
+                    mMessagesDatabaseReference.push().setValue(message);
+                }
+            });
+        }
     }
 
     private void onSignedInInitialize(String displayName) {
